@@ -4,5 +4,5 @@
         "./with_image/evaluate",
         "./with_landmarks"
     ],
-    "python.analysis.autoImportCompletions": false
+    "python.analysis.autoImportCompletions": false,
 }

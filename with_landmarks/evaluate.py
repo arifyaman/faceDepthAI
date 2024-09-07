@@ -71,7 +71,7 @@ def test(image_path, model_path, landmark_dim=468, depth_map_size=(85, 85)):
     display_results(image, depth_map)
 
 if __name__ == '__main__':
-    image_path = 'train_data/images/image_299.jpg'
-    model_path = 'checkpoint.pth'  # Ensure this is the correct path to your checkpoint file
+    image_path = 'train_data/images/image_1372.jpg'
+    model_path = 'model_epoch_300.pth'  # Ensure this is the correct path to your checkpoint file
     
     test(image_path, model_path)

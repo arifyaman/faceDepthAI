@@ -1,8 +1,24 @@
+import os
 import cv2
 import numpy as np
 import mediapipe as mp
 import trimesh
 import matplotlib.pyplot as plt
+import OpenEXR
+import Imath
+import concurrent.futures
+
+def save_exr(output_path, depth_map):
+    # Define EXR channel format
+    header = OpenEXR.Header(depth_map.shape[1], depth_map.shape[0])
+    header['channels'] = {'Y': Imath.Channel(Imath.PixelType(Imath.PixelType.FLOAT))}
+    
+    # Create an EXR file
+    exr_file = OpenEXR.OutputFile(output_path, header)
+    
+    # Write only the Y (depth) channel
+    exr_file.writePixels({'Y': depth_map.astype(np.float32).tobytes()})
+    exr_file.close()
 
 def extract_landmarks(image):
     """Extract 478 face landmarks from an image using MediaPipe."""
@@ -39,8 +55,8 @@ def apply_landmarks_to_mesh(landmarks, mesh_file):
     default_mesh.vertices = landmarks
     return default_mesh
 
-def create_depth_map(mesh, image_dims):
-    """Create a depth map from the mesh that matches the dimensions of the original image."""
+def create_depth_map(mesh, image_dims, bbox, scale_factor=1.0, base_position=20.0):
+    """Create a depth map from the mesh and resize it to the bounding box dimensions."""
     vertices = mesh.vertices
     faces = mesh.faces
     image_height, image_width = image_dims
@@ -96,10 +112,64 @@ def create_depth_map(mesh, image_dims):
     # Replace infinite values with the minimum depth
     depth_image[np.isinf(depth_image)] = 0
 
+    
+
     # Normalize depth map to the range [1, 100]
     depth_image = (depth_image - np.min(depth_image)) / (np.max(depth_image) - np.min(depth_image) + 1e-6) * 99 + 1
 
-    return depth_image
+    depth_image *= scale_factor
+
+    depth_image += base_position
+
+    # Extract bounding box coordinates
+    x_min, y_min, x_max, y_max = bbox
+
+    # Ensure bounding box is within image dimensions
+    x_min, x_max = int(max(0, x_min)), int(min(image_width - 1, x_max))
+    y_min, y_max = int(max(0, y_min)), int(min(image_height - 1, y_max))
+
+    # Calculate bounding box dimensions
+    bbox_width = x_max - x_min + 1
+    bbox_height = y_max - y_min + 1
+
+    depth_image[np.less(depth_image,base_position+2)] = 100
+
+    # Resize depth image to the bounding box dimensions
+    resized_depth_image = cv2.resize(depth_image, (bbox_width, bbox_height), interpolation=cv2.INTER_LINEAR)
+    
+    return resized_depth_image
+
+def create_final_depth_map(resized_depth_map, bbox, original_dims, target_dims=(360, 640)):
+    """Create a new depth map with the resized depth map inserted into the bounding box, then resize the final map."""
+    # Initialize the depth map with a constant depth value of 100
+    original_height, original_width = original_dims
+    depth_map = np.full((original_height, original_width), 100, dtype=np.float32)
+
+    # Extract bounding box coordinates
+    x_min, y_min, x_max, y_max = bbox
+
+    # Calculate target bounding box coordinates for the depth map insertion
+    x_min_target = int(max(0, x_min))
+    y_min_target = int(max(0, y_min))
+    x_max_target = int(min(original_width - 1, x_min_target + resized_depth_map.shape[1] - 1))
+    y_max_target = int(min(original_height - 1, y_min_target + resized_depth_map.shape[0] - 1))
+
+    # Calculate the width and height of the adjusted resized depth map
+    adjusted_width = x_max_target - x_min_target + 1
+    adjusted_height = y_max_target - y_min_target + 1
+
+    # Ensure that resized depth map fits into the calculated target area
+    adjusted_resized_depth_map = resized_depth_map[
+        :adjusted_height, :adjusted_width
+    ]
+
+    # Insert the resized depth map into the final depth map
+    depth_map[y_min_target:y_max_target + 1, x_min_target:x_max_target + 1] = adjusted_resized_depth_map
+
+    # Resize the depth map to the target dimensions
+    final_depth_map = cv2.resize(depth_map, target_dims, interpolation=cv2.INTER_LINEAR)
+
+    return final_depth_map
 
 def display_images(original_image, depth_image):
     """Display the original image and depth map side by side."""
@@ -133,26 +203,62 @@ def translate_camera(mesh, translation_vector):
     mesh.vertices = translated_vertices
     return mesh
 
-def main():
+def process_image(image_file, input_folder, output_folder):
+    """Process a single image file and save the depth map."""
+    # Construct full file paths
+    image_path = os.path.join(input_folder, image_file)
+    output_depth_map_path = os.path.join(output_folder, os.path.splitext(image_file)[0] + '.exr')
+
     # Load and process the image
-    image = cv2.imread('image_2433.jpg')
+    image = cv2.imread(image_path)
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     # Extract landmarks
     landmarks = extract_landmarks(image_rgb)
-    np.save('extracted_landmarks.npy', landmarks)
+
+    # Calculate bounding box
+    x_min, y_min = np.min(landmarks[:, :2], axis=0)
+    x_max, y_max = np.max(landmarks[:, :2], axis=0)
+    bbox = (x_min, y_min, x_max, y_max)
+    print(f"Processing image: {image_file}")
+    print(f"Bounding box: x_min={x_min}, y_min={y_min}, x_max={x_max}, y_max={y_max}")
 
     # Apply landmarks to mesh
     mesh = apply_landmarks_to_mesh(landmarks, 'face_model_with_iris.obj')
-    mesh.export('updated_face_mesh_478.obj')
-    print("Mesh exported successfully to 'updated_face_mesh_478.obj'")
-    print(image.shape)
     
-    # Create depth map
-    depth_map = create_depth_map(mesh, image.shape[:2])
+    # Create and resize depth map
+    resized_depth_map = create_depth_map(mesh, image.shape[:2], bbox, 0.2)
 
-    # Display images
-    display_images(image_rgb, depth_map)
+    # Create final depth map
+    final_depth_map = create_final_depth_map(resized_depth_map, bbox, image.shape[:2], target_dims=(360, 640))
+
+    # Save the final depth map
+    save_exr(output_depth_map_path, final_depth_map)
+
+    print(f"Saved depth map to: {output_depth_map_path}")
+
+def main():
+    input_folder = 'images'  # Update this with your input folder path
+    output_folder = 'depth_maps'  # Update this with your output folder path
+
+    # Ensure the output folder exists
+    os.makedirs(output_folder, exist_ok=True)
+
+    # List all image files in the input folder
+    image_files = [f for f in os.listdir(input_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+
+    # Use ThreadPoolExecutor for parallel processing
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        # Map the process_image function to all image files
+        futures = [executor.submit(process_image, image_file, input_folder, output_folder) for image_file in image_files]
+        # Wait for all futures to complete
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()  # Retrieve result to check for exceptions
+            except Exception as e:
+                print(f"An error occurred: {e}")
+
+    print("Processing complete.")
 
 if __name__ == "__main__":
     main()

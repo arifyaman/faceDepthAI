@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 # Replace with the path to your EXR file
 
-file_path = "image_303.exr"
+file_path = "image_1089.exr"
 #file_path = "calculate/output_depth.exr"
 depth_channel = "Y"
 
