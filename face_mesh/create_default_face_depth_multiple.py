@@ -112,13 +112,13 @@ def create_depth_map(mesh, image_dims, bbox, scale_factor=1.0, base_position=20.
     # Replace infinite values with the minimum depth
     depth_image[np.isinf(depth_image)] = 0
 
-    
-
     # Normalize depth map to the range [1, 100]
     depth_image = (depth_image - np.min(depth_image)) / (np.max(depth_image) - np.min(depth_image) + 1e-6) * 99 + 1
 
+    # Scale with scale factor
     depth_image *= scale_factor
 
+    # add the base position to all depth map values
     depth_image += base_position
 
     # Extract bounding box coordinates
@@ -203,6 +203,42 @@ def translate_camera(mesh, translation_vector):
     mesh.vertices = translated_vertices
     return mesh
 
+def rotate_camera(mesh, rotation_angles):
+    """
+    Rotates the vertices of the mesh according to the given rotation angles.
+    
+    Parameters:
+    - mesh: The 3D mesh object (trimesh.Trimesh).
+    - rotation_angles: A 3D vector (rx, ry, rz) representing the rotation angles in radians
+                       around the X, Y, and Z axes.
+    
+    Returns:
+    - Rotated mesh (with updated vertices).
+    """
+    rx, ry, rz = rotation_angles
+
+    # Rotation matrices for X, Y, and Z axes
+    rotation_x = np.array([[1, 0, 0],
+                           [0, np.cos(rx), -np.sin(rx)],
+                           [0, np.sin(rx), np.cos(rx)]])
+    
+    rotation_y = np.array([[np.cos(ry), 0, np.sin(ry)],
+                           [0, 1, 0],
+                           [-np.sin(ry), 0, np.cos(ry)]])
+    
+    rotation_z = np.array([[np.cos(rz), -np.sin(rz), 0],
+                           [np.sin(rz), np.cos(rz), 0],
+                           [0, 0, 1]])
+
+    # Combined rotation matrix
+    rotation_matrix = rotation_z @ rotation_y @ rotation_x
+
+    # Rotate vertices
+    rotated_vertices = np.dot(mesh.vertices, rotation_matrix.T)
+    mesh.vertices = rotated_vertices
+
+    return mesh
+
 def process_image(image_file, input_folder, output_folder):
     """Process a single image file and save the depth map."""
     # Construct full file paths
@@ -220,11 +256,17 @@ def process_image(image_file, input_folder, output_folder):
     x_min, y_min = np.min(landmarks[:, :2], axis=0)
     x_max, y_max = np.max(landmarks[:, :2], axis=0)
     bbox = (x_min, y_min, x_max, y_max)
-    print(f"Processing image: {image_file}")
-    print(f"Bounding box: x_min={x_min}, y_min={y_min}, x_max={x_max}, y_max={y_max}")
 
     # Apply landmarks to mesh
     mesh = apply_landmarks_to_mesh(landmarks, 'face_model_with_iris.obj')
+
+    # Translate the camera (translate mesh vertices)
+    tranlation_vector = (0, 0, 0)
+    mesh = translate_camera(mesh, tranlation_vector)
+
+    # Rotate the camera (rotate the object)
+    rotation_angles = np.radians([-15, 0, 0])  # Rotate by 10° around X, 15° around Y
+    mesh = rotate_camera(mesh, rotation_angles)
     
     # Create and resize depth map
     resized_depth_map = create_depth_map(mesh, image.shape[:2], bbox, 0.2)

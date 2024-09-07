@@ -111,13 +111,13 @@ def create_depth_map(mesh, image_dims, bbox, scale_factor=1.0, base_position=20.
     # Replace infinite values with the minimum depth
     depth_image[np.isinf(depth_image)] = 0
 
-    
-
     # Normalize depth map to the range [1, 100]
     depth_image = (depth_image - np.min(depth_image)) / (np.max(depth_image) - np.min(depth_image) + 1e-6) * 99 + 1
 
+    # Scale with scale factor
     depth_image *= scale_factor
 
+    # add the base position to all depth map values
     depth_image += base_position
 
     # Extract bounding box coordinates
@@ -202,12 +202,48 @@ def translate_camera(mesh, translation_vector):
     mesh.vertices = translated_vertices
     return mesh
 
+def rotate_camera(mesh, rotation_angles):
+    """
+    Rotates the vertices of the mesh according to the given rotation angles.
+    
+    Parameters:
+    - mesh: The 3D mesh object (trimesh.Trimesh).
+    - rotation_angles: A 3D vector (rx, ry, rz) representing the rotation angles in radians
+                       around the X, Y, and Z axes.
+    
+    Returns:
+    - Rotated mesh (with updated vertices).
+    """
+    rx, ry, rz = rotation_angles
+
+    # Rotation matrices for X, Y, and Z axes
+    rotation_x = np.array([[1, 0, 0],
+                           [0, np.cos(rx), -np.sin(rx)],
+                           [0, np.sin(rx), np.cos(rx)]])
+    
+    rotation_y = np.array([[np.cos(ry), 0, np.sin(ry)],
+                           [0, 1, 0],
+                           [-np.sin(ry), 0, np.cos(ry)]])
+    
+    rotation_z = np.array([[np.cos(rz), -np.sin(rz), 0],
+                           [np.sin(rz), np.cos(rz), 0],
+                           [0, 0, 1]])
+
+    # Combined rotation matrix
+    rotation_matrix = rotation_z @ rotation_y @ rotation_x
+
+    # Rotate vertices
+    rotated_vertices = np.dot(mesh.vertices, rotation_matrix.T)
+    mesh.vertices = rotated_vertices
+
+    return mesh
+
 def main():
     # Load and process the image
-    image = cv2.imread('images/frame0001.jpg')
+    image = cv2.imread('images/0001.jpg')
     output_depth_map_folder = ''
 
-    output_depth_map_path = os.path.join(output_depth_map_folder, 'out.exr')
+    output_depth_map_path = os.path.join(output_depth_map_folder, 'depth_map_sample.exr')
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     # Extract landmarks
@@ -221,7 +257,15 @@ def main():
 
     # Apply landmarks to mesh
     mesh = apply_landmarks_to_mesh(landmarks, 'face_model_with_iris.obj')
-    
+
+    # Translate the camera (translate mesh vertices)
+    tranlation_vector = (0, 0, 0)
+    mesh = translate_camera(mesh, tranlation_vector)
+
+    # Rotate the camera (rotate the object)
+    rotation_angles = np.radians([-15, 0, 0])  # Rotate by 10° around X, 15° around Y
+    mesh = rotate_camera(mesh, rotation_angles)
+
     # Create and resize depth map
     resized_depth_map = create_depth_map(mesh, image.shape[:2], bbox, 0.2)
 
@@ -230,18 +274,36 @@ def main():
 
     save_exr(output_depth_map_path, final_depth_map)
 
-    # Display images
+    # Normalize depth map for overlay display (scale to [0, 255])
+    normalized_depth_map = cv2.normalize(final_depth_map, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+    # Apply a colormap for visualization
+    depth_map_colored = cv2.applyColorMap(normalized_depth_map, cv2.COLORMAP_PLASMA)
+
+    # Resize depth_map_colored to match image_rgb size
+    depth_map_colored_resized = cv2.resize(depth_map_colored, (image_rgb.shape[1], image_rgb.shape[0]))
+
+
+    # Blend the original image with the depth map for overlay
+    blended_image = cv2.addWeighted(image_rgb, 0.6, depth_map_colored_resized, 0.4, 0)
+
+    # Display the images
     plt.figure(figsize=(12, 6))
 
-    plt.subplot(1, 2, 1)
+    plt.subplot(1, 3, 1)
     plt.imshow(image_rgb)
     plt.title('Original Image')
     plt.axis('off')
 
-    plt.subplot(1, 2, 2)
-    plt.imshow(final_depth_map, cmap='plasma')
+    plt.subplot(1, 3, 2)
+    plt.imshow(final_depth_map)
     plt.colorbar(label='Depth')
-    plt.title('Final Depth Map (360x640)')
+    plt.title('Colored Depth Map')
+    plt.axis('off')
+
+    plt.subplot(1, 3, 3)
+    plt.imshow(blended_image)
+    plt.title('Overlay of Original Image and Depth Map')
     plt.axis('off')
 
     plt.show()
