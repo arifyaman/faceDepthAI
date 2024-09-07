@@ -49,7 +49,6 @@ class FacialDepthDatasetWithLandmarks(Dataset):
         
         # Ensure landmarks are loaded as numeric array
         landmarks = np.load(landmark_name, allow_pickle=False).astype(np.float32)
-        
         # Load the depth map
         depth_name = os.path.join(self.depth_dir, base_name + '.exr')
         if not os.path.exists(depth_name):

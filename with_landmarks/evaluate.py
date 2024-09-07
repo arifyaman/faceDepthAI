@@ -3,7 +3,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import matplotlib.pyplot as plt
-from model import SimpleLandmarkOnlyCNN
+from model import LandmarkToDepthCNN  # Updated model import
 
 # Initialize MediaPipe Face Mesh
 mp_face_mesh = mp.solutions.face_mesh
@@ -16,14 +16,15 @@ def get_landmarks(image):
     if results.multi_face_landmarks:
         landmarks = results.multi_face_landmarks[0].landmark
         landmarks_array = np.array([(lm.x * 85, lm.y * 85, lm.z * 10) for lm in landmarks])
-    
         return landmarks_array
     else:
         raise ValueError("No face detected in the image")
 
 def preprocess_landmarks(landmarks_array, landmark_dim=468):
     """ Preprocess landmarks for model input. """
-    return torch.tensor(landmarks_array, dtype=torch.float32).unsqueeze(0)  # Add batch dimension
+    # Ensure landmarks are reshaped to match the model's expected input shape: [batch_size, landmark_dim, 3]
+    landmarks_tensor = torch.tensor(landmarks_array, dtype=torch.float32).unsqueeze(0)  # Add batch dimension
+    return landmarks_tensor
 
 def display_results(image, depth_map):
     """ Display the image and depth map side by side. """
@@ -42,7 +43,7 @@ def test(image_path, model_path, landmark_dim=468, depth_map_size=(85, 85)):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     # Load the trained model
-    model = SimpleLandmarkOnlyCNN(landmark_dim=landmark_dim, out_channels=1, depth_map_size=depth_map_size)
+    model = LandmarkToDepthCNN(landmark_dim=landmark_dim, landmark_coords=3, out_channels=1, depth_map_size=depth_map_size)
     
     # Load the checkpoint
     checkpoint = torch.load(model_path, map_location=device)
@@ -71,6 +72,6 @@ def test(image_path, model_path, landmark_dim=468, depth_map_size=(85, 85)):
 
 if __name__ == '__main__':
     image_path = 'train_data/images/image_299.jpg'
-    model_path = 'model_epoch_500.pth'  # Ensure this is the correct path to your checkpoint file
+    model_path = 'checkpoint.pth'  # Ensure this is the correct path to your checkpoint file
     
     test(image_path, model_path)

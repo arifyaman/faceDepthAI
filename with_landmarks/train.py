@@ -4,8 +4,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import logging
 import os
-from model import SimpleLandmarkOnlyCNN
-from data_loading import FacialDepthDatasetWithLandmarks
+from model import LandmarkToDepthCNN  # Updated model name
+from data_loading import FacialDepthDatasetWithLandmarks  # Assuming this is correctly implemented
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -54,7 +54,7 @@ def train():
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     
     # Initialize the model, loss function, and optimizer
-    model = SimpleLandmarkOnlyCNN(landmark_dim=468, out_channels=1, depth_map_size=(85, 85)).to(device)
+    model = LandmarkToDepthCNN(landmark_dim=468, landmark_coords=3, out_channels=1, depth_map_size=(85, 85)).to(device)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     
@@ -68,12 +68,16 @@ def train():
         for batch_idx, (landmarks, depth_maps) in enumerate(train_loader):
             landmarks = landmarks.to(device)
             depth_maps = depth_maps.to(device)
-            
+
             optimizer.zero_grad()
             
             # Forward pass
             outputs = model(landmarks)
             
+            # Ensure depth_maps has the correct shape for comparison
+            if depth_maps.ndim == 3:  # If depth_maps already has 3 dimensions
+                depth_maps = depth_maps.unsqueeze(1)  # Add channel dimension
+
             # Calculate loss
             loss = criterion(outputs, depth_maps)
             loss.backward()
@@ -84,7 +88,10 @@ def train():
             
             # Log batch loss
             logging.info(f'Epoch {epoch + 1}/{num_epochs}, Batch {batch_idx + 1}/{len(train_loader)}, Batch Loss: {batch_loss:.4f}')
-        
+
+            # Save checkpoint after every batch (optional)
+            save_checkpoint(epoch, model, optimizer, batch_loss, filename='checkpoint.pth')
+
         # Calculate and log epoch loss
         epoch_loss = running_loss / len(train_loader.dataset)
         logging.info(f'Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}')
