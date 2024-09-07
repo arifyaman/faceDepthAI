@@ -1,0 +1,8 @@
+{
+    "python.analysis.extraPaths": [
+        "./with_image",
+        "./with_image/evaluate",
+        "./with_landmarks"
+    ],
+    "python.analysis.autoImportCompletions": false
+}
