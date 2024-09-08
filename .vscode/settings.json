@@ -2,7 +2,8 @@
     "python.analysis.extraPaths": [
         "./with_image",
         "./with_image/evaluate",
-        "./with_landmarks"
+        "./with_landmarks",
+        "./face_mesh"
     ],
     "python.analysis.autoImportCompletions": false,
 }
