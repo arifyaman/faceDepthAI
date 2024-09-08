@@ -139,7 +139,7 @@ class DepthMapProcessor:
         
         return resized_depth_image
 
-    def create_final_depth_map(self, resized_depth_map, bbox, original_dims, target_dims=(360, 640), scale_factors=(1.0, 1.0), margin=(0, 0)):
+    def create_final_depth_map(self, resized_depth_map, bbox, original_dims, target_dims=(360, 640), face_scale_factors=(1.0, 1.0), margin=(0, 0)):
         """Create a new depth map with the resized depth map (scaled and translated) inserted into the bounding box, then resize the final map."""
         # Initialize the depth map with a constant depth value of 100
         original_height, original_width = original_dims
@@ -153,7 +153,7 @@ class DepthMapProcessor:
         bbox_center_y = (y_min + y_max) / 2
 
         # Scale factors for width and height
-        scale_x, scale_y = scale_factors
+        scale_x, scale_y = face_scale_factors
 
         # Margin vector for translation (x_margin, y_margin)
         x_margin, y_margin = margin

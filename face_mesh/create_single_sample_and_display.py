@@ -16,15 +16,15 @@ face_model_path = 'face_model_with_iris.obj'
 
 # Parameters for DepthMapProcessor
 depth_map_params = {
-    'scale_factor': 0.2,                   # Scale factor for depth map creation
+    'scale_factor': 0.2,                   # Scale factor for depth map values probably no need to play around, it is configured for Iphone15
     'target_dims': (360, 640),             # Target dimensions for the final depth map
-    'scale_factors': (1, 1.15),            # Scale factors for width and height only for face area
+    'face_scale_factors': (1, 1.15),       # Scale factors for width and height only for face area
     'margin': (0, -20)                     # Margin for translating the face area
 }
 
 # Camera translation and rotation parameters
 camera_params = {
-    'translation_vector': (0, 0, 0),       # Translation vector for the camera
+    'translation_vector': (0, 0, 0),            # Translation vector for the camera
     'rotation_angles': np.radians([-15, 0, 0])  # Rotation angles (in radians) for the camera
 }
 
@@ -68,7 +68,7 @@ final_depth_map = processor.create_final_depth_map(
     bbox, 
     image.shape[:2], 
     target_dims=depth_map_params['target_dims'], 
-    scale_factors=depth_map_params['scale_factors'], 
+    face_scale_factors=depth_map_params['face_scale_factors'], 
     margin=depth_map_params['margin']
 )
 
