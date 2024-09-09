@@ -36,7 +36,7 @@ if depth_channel in channels:
     print(f"Depth data min: {depth_data.min()}, max: {depth_data.max()}")
 
     # Visualize the depth data using a heatmap
-    plt.figure(figsize=(10, 10))
+    plt.figure(figsize=(10, 8))
     plt.imshow(depth_data, cmap='viridis')
     plt.colorbar(label='Depth Value')
     plt.title('Depth Map Visualization')
