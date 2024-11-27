@@ -7,10 +7,9 @@ from depth_map_processor import DepthMapProcessor
 processor = DepthMapProcessor()
 
 # Parameters
-input_image_path = 'images/0001.jpg'
+input_image_path = 'images/frame_0000.jpg'
 output_depth_map_folder = ''
 output_depth_map_filename = 'depth_map_sample.exr'
-face_model_path = 'face_model_with_iris.obj'
 
 #### IMPORTANT #### Fine tune these paramters for one of your image to see mask matches with your face
 
@@ -46,7 +45,7 @@ bbox = (x_min, y_min, x_max, y_max)
 print(f"Bounding box: x_min={x_min}, y_min={y_min}, x_max={x_max}, y_max={y_max}")
 
 # Apply landmarks to mesh
-mesh = processor.apply_landmarks_to_mesh(landmarks, face_model_path)
+mesh = processor.apply_landmarks_to_mesh(landmarks)
 
 # Translate the camera (translate mesh vertices)
 mesh = processor.translate_camera(mesh, camera_params['translation_vector'])
@@ -96,7 +95,7 @@ plt.title('Original Image')
 plt.axis('off')
 
 plt.subplot(1, 3, 2)
-plt.imshow(final_depth_map, cmap='plasma')
+plt.imshow(final_depth_map, cmap='inferno', vmin=15, vmax=50)
 plt.colorbar(label='Depth')
 plt.title('Colored Depth Map')
 plt.axis('off')

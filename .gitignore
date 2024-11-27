@@ -65,5 +65,8 @@ python-env-tools/**
 # Ignore all .exr files
 *.pth
 
+# Ignore all .exr files
+*.mp4
+
 with_image/models
 with_image/runs

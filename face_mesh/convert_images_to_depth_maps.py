@@ -3,12 +3,6 @@ import cv2
 import numpy as np
 import concurrent.futures
 from depth_map_processor import DepthMapProcessor
-import logging
-
-logging.getLogger('tensorflow').setLevel(logging.ERROR)  # Suppresses WARNING logs
-
-# Initialize the DepthMapProcessor
-processor = DepthMapProcessor()
 
 # Parameters for DepthMapProcessor
 depth_map_params = {
@@ -24,7 +18,13 @@ camera_params = {
     'rotation_angles': np.radians([-15, 0, 0])  # Rotation angles (in radians) for the camera
 }
 
+batch_size = 10  # Number of images per batch
+
+
 def process_image(image_file, input_folder, output_folder):
+    # Initialize the DepthMapProcessor
+    processor = DepthMapProcessor()
+    
     """Process a single image file and save the depth map."""
     # Construct full file paths
     image_path = os.path.join(input_folder, image_file)
@@ -47,7 +47,7 @@ def process_image(image_file, input_folder, output_folder):
     bbox = (x_min, y_min, x_max, y_max)
 
     # Apply landmarks to mesh
-    mesh = processor.apply_landmarks_to_mesh(landmarks, 'face_model_with_iris.obj')
+    mesh = processor.apply_landmarks_to_mesh(landmarks)
 
     # Translate the camera (translate mesh vertices)
     mesh = processor.translate_camera(mesh, camera_params['translation_vector'])
@@ -78,6 +78,20 @@ def process_image(image_file, input_folder, output_folder):
 
     print(f"Saved depth map to: {output_depth_map_path}")
 
+def process_batch(batch, input_folder, output_folder):
+    """Process a batch of images."""
+    # For each image in the batch, process it in parallel using ProcessPoolExecutor
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        # Execute the `process_image` for each image in the batch concurrently
+        futures = [executor.submit(process_image, image_file, input_folder, output_folder) for image_file in batch]
+
+        # Wait for all futures to complete (processes all images in the batch)
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()  # Get the result of the task (this will raise exceptions if any occurred)
+            except Exception as e:
+                print(f"An error occurred while processing an image: {e}")
+
 def main():
     input_folder = 'images'  # Update this with your input folder path
     output_folder = 'depth_maps'  # Update this with your output folder path
@@ -87,17 +101,16 @@ def main():
 
     # List all image files in the input folder
     image_files = [f for f in os.listdir(input_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    
+    # Determine the number of processes: Use number of CPU cores (for CPU-bound tasks)
+    num_processes = os.cpu_count()  # Using all CPU cores
 
-    # Use ThreadPoolExecutor for parallel processing
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        # Map the process_image function to all image files
-        futures = [executor.submit(process_image, image_file, input_folder, output_folder) for image_file in image_files]
-        # Wait for all futures to complete
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                future.result()  # Retrieve result to check for exceptions
-            except Exception as e:
-                print(f"An error occurred: {e}")
+    # Divide images into batches
+    batches = [image_files[i:i + batch_size] for i in range(0, len(image_files), batch_size)]
+
+    # Process batches sequentially, but allow multiprocessing for each batch
+    for batch in batches:
+        process_batch(batch, input_folder, output_folder)
 
     print("Processing complete.")
 

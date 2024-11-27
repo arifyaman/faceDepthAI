@@ -7,6 +7,13 @@ import OpenEXR
 import Imath
 
 class DepthMapProcessor:
+    
+    def __init__(self):
+        # Load the default mesh once during initialization
+        self.default_mesh = trimesh.load('face_model_with_iris.obj')
+
+        if self.default_mesh.vertices.shape[0] != 478:
+            raise ValueError(f"The default mesh must have 478 vertices. Found {self.default_mesh.vertices.shape[0]} instead.")
 
     def save_exr(self, output_path, depth_map):
         # Define EXR channel format
@@ -40,20 +47,18 @@ class DepthMapProcessor:
         else:
             raise ValueError("Could not extract landmarks from the image.")
 
-    def apply_landmarks_to_mesh(self, landmarks, mesh_file):
+    def apply_landmarks_to_mesh(self, landmarks):
         """Apply extracted landmarks to the default face mesh and return the updated mesh."""
-        default_mesh = trimesh.load(mesh_file)
-
-        if default_mesh.vertices.shape[0] != 478:
-            raise ValueError(f"The default mesh must have 478 vertices. Found {default_mesh.vertices.shape[0]} instead.")
+        if landmarks.shape[0] != 478:
+            raise ValueError(f"Expected 478 landmarks, but got {landmarks.shape[0]}.")
 
         # Scale and align landmarks to fit the default mesh
-        scale_factor = np.max(np.abs(default_mesh.vertices)) / np.max(np.abs(landmarks))
+        scale_factor = np.max(np.abs(self.default_mesh.vertices)) / np.max(np.abs(landmarks))
         landmarks *= scale_factor * 2
-        landmarks += default_mesh.vertices.mean(axis=0) - landmarks.mean(axis=0)
+        landmarks += self.default_mesh.vertices.mean(axis=0) - landmarks.mean(axis=0)
 
-        default_mesh.vertices = landmarks
-        return default_mesh
+        self.default_mesh.vertices = landmarks
+        return self.default_mesh
 
     def create_depth_map(self, mesh, image_dims, bbox, scale_factor=1.0, base_position=20.0):
         """Create a depth map from the mesh and resize it to the bounding box dimensions."""

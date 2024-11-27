@@ -1,6 +1,6 @@
-opencv-python
-numpy
-mediapipe
-trimesh
-matplotlib
-openexr
+opencv-python==4.10.0.84
+numpy==1.26.4
+mediapipe==0.10.18
+trimesh==4.5.2
+matplotlib==3.9.2
+openexr==3.3.1
